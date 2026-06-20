@@ -1,0 +1,9 @@
+node_modules
+.pnpm-store
+.venv
+dist
+build
+data
+*.db
+.env
+.git
