@@ -1,0 +1,28 @@
+{
+  "agent": {
+    "favorite_models": [],
+    "inline_assistant_model": {
+      "provider": "openrouter",
+      "model": "google/gemini-4-argon",
+      "enable_thinking": false
+    },
+    "model_parameters": []
+  },
+  "terminal": {
+    "shell": { "program": "/usr/bin/zsh" },
+    "dock": "bottom"
+  },
+  "language_models": {
+    "openai": {
+      "api_url": "http://127.0.0.1:8080/v1",
+      "available_models": [
+        {
+          "name": "coder-local",
+          "display_name": "Athena Local Qwen (16K)",
+          "max_tokens": 16384
+        }
+      ]
+    }
+  },
+  "show_inline_completions": true
+}

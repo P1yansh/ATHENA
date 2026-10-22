@@ -1,0 +1,209 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+ATHENA_DIR="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+CATALOG="${ATHENA_DIR}/catalog"
+PROJECTS_DIR="${ATHENA_DIR}/projects"
+LOCAL_OPENCODE="./.opencode"
+
+case "${1:-}" in
+  list)
+    echo "=== Custom Agents ===" && ls -1 "$CATALOG/custom-agents" 2>/dev/null || true
+    echo "=== Custom Skills ===" && ls -1 "$CATALOG/custom-skills" 2>/dev/null || true
+    echo "=== Upstream ECC Agents ===" && ls -1 "$CATALOG/upstream-ecc/agents" 2>/dev/null || true
+    echo "=== Upstream ECC Skills ===" && ls -1 "$CATALOG/upstream-ecc/skills" 2>/dev/null || true
+    ;;
+  new-project)
+    PROJ_NAME="${2:?Usage: athena-ctl new-project <project-name>}"
+    TARGET="${PROJECTS_DIR}/${PROJ_NAME}"
+    mkdir -p "$TARGET/.opencode/agents" "$TARGET/.opencode/skills"
+    cd "$TARGET"
+    [[ -d ".git" ]] || git init
+    if [[ ! -f "./AGENTS.md" ]]; then
+      cat << 'AGENTSEOF' > ./AGENTS.md
+# Project Agent Guidelines (Athena Harness)
+- Inspect files before patching; prefer minimal targeted diffs.
+- Run non-interactive test suites after logic changes.
+- Never commit secrets or alter git history without explicit permission.
+AGENTSEOF
+    fi
+    echo "🏛️  Created new project at: $TARGET"
+    ;;
+  init-repo)
+    mkdir -p "$LOCAL_OPENCODE/agents" "$LOCAL_OPENCODE/skills"
+    if [[ ! -f "./AGENTS.md" ]]; then
+      cat << 'AGENTSEOF' > ./AGENTS.md
+# Project Agent Guidelines (Athena Harness)
+- Inspect files before patching; prefer minimal targeted diffs.
+- Run non-interactive test suites after logic changes.
+- Never commit secrets or alter git history without explicit permission.
+AGENTSEOF
+    fi
+    echo "Initialized lean .opencode/ harness and AGENTS.md in $(pwd)"
+    ;;
+  add-agent)
+    [[ $# -lt 2 ]] && echo "Usage: athena-ctl add-agent <agent-name> [agent-name...]" >&2 && exit 1
+    mkdir -p "$LOCAL_OPENCODE/agents"
+    ITEMS=()
+    for arg in "${@:2}"; do
+      IFS=',' read -ra ADDR <<< "$arg"
+      for item in "${ADDR[@]}"; do
+        [[ -n "$item" ]] && ITEMS+=("$item")
+      done
+    done
+    for NAME in "${ITEMS[@]}"; do
+      if [[ -f "$CATALOG/custom-agents/${NAME}.md" ]]; then
+        ln -sfn "$CATALOG/custom-agents/${NAME}.md" "$LOCAL_OPENCODE/agents/${NAME}.md"
+        echo "Linked agent '$NAME' -> $LOCAL_OPENCODE/agents/${NAME}.md"
+      elif [[ -f "$CATALOG/upstream-ecc/agents/${NAME}.md" ]]; then
+        ln -sfn "$CATALOG/upstream-ecc/agents/${NAME}.md" "$LOCAL_OPENCODE/agents/${NAME}.md"
+        echo "Linked agent '$NAME' -> $LOCAL_OPENCODE/agents/${NAME}.md"
+      else
+        echo "Warning: Agent '$NAME' not found in custom-agents or upstream-ecc." >&2
+      fi
+    done
+    ;;
+  add-skill)
+    [[ $# -lt 2 ]] && echo "Usage: athena-ctl add-skill <skill-name> [skill-name...]" >&2 && exit 1
+    mkdir -p "$LOCAL_OPENCODE/skills"
+    ITEMS=()
+    for arg in "${@:2}"; do
+      IFS=',' read -ra ADDR <<< "$arg"
+      for item in "${ADDR[@]}"; do
+        [[ -n "$item" ]] && ITEMS+=("$item")
+      done
+    done
+    for NAME in "${ITEMS[@]}"; do
+      if [[ -d "$CATALOG/custom-skills/$NAME" ]]; then
+        ln -sfn "$CATALOG/custom-skills/$NAME" "$LOCAL_OPENCODE/skills/$NAME"
+        echo "Linked skill '$NAME' -> $LOCAL_OPENCODE/skills/$NAME"
+      elif [[ -d "$CATALOG/upstream-ecc/skills/$NAME" ]]; then
+        ln -sfn "$CATALOG/upstream-ecc/skills/$NAME" "$LOCAL_OPENCODE/skills/$NAME"
+        echo "Linked skill '$NAME' -> $LOCAL_OPENCODE/skills/$NAME"
+      else
+        echo "Warning: Skill '$NAME' not found in custom-skills or upstream-ecc." >&2
+      fi
+    done
+    ;;
+  _list-agents)
+    [[ -d "$CATALOG/custom-agents" ]] && ls -1 "$CATALOG/custom-agents" 2>/dev/null | sed 's/\.md$//' || true
+    [[ -d "$CATALOG/upstream-ecc/agents" ]] && ls -1 "$CATALOG/upstream-ecc/agents" 2>/dev/null | sed 's/\.md$//' || true
+    ;;
+  _list-skills)
+    [[ -d "$CATALOG/custom-skills" ]] && ls -1 "$CATALOG/custom-skills" 2>/dev/null || true
+    [[ -d "$CATALOG/upstream-ecc/skills" ]] && ls -1 "$CATALOG/upstream-ecc/skills" 2>/dev/null || true
+    ;;
+  completion)
+    SHELL_TYPE="${2:-zsh}"
+    if [[ "$SHELL_TYPE" == "zsh" ]]; then
+      cat << 'COMP_ZSH'
+#compdef athena-ctl
+
+_athena_ctl() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
+
+  _arguments -C \
+    '1:command:->cmd' \
+    '*::args:->args'
+
+  case $state in
+    cmd)
+      local -a commands
+      commands=(
+        'list:List catalog items'
+        'new-project:Create a new project workspace'
+        'init-repo:Initialize an existing repository'
+        'add-agent:Link one or more agents from catalog'
+        'add-skill:Link one or more skills from catalog'
+        'new-skill:Scaffold a new custom skill'
+        'completion:Generate shell completion script'
+      )
+      _describe -t commands 'athena-ctl commands' commands
+      ;;
+    args)
+      case $line[1] in
+        add-agent)
+          local -a agents
+          agents=(${(f)"$(athena-ctl _list-agents 2>/dev/null)"})
+          _values -s ',' 'agent' $agents
+          ;;
+        add-skill)
+          local -a skills
+          skills=(${(f)"$(athena-ctl _list-skills 2>/dev/null)"})
+          _values -s ',' 'skill' $skills
+          ;;
+        new-project)
+          _message 'project name'
+          ;;
+        new-skill)
+          _message 'skill name'
+          ;;
+        completion)
+          local -a shells
+          shells=('zsh:Zsh completion' 'bash:Bash completion')
+          _describe -t shells 'shell type' shells
+          ;;
+      esac
+      ;;
+  esac
+}
+
+if (( $+functions[compdef] )); then
+  compdef _athena_ctl athena-ctl
+fi
+COMP_ZSH
+    elif [[ "$SHELL_TYPE" == "bash" ]]; then
+      cat << 'COMP_BASH'
+_athena_ctl_bash() {
+  local cur prev
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+  local commands="list new-project init-repo add-agent add-skill new-skill completion"
+
+  if [[ $COMP_CWORD -eq 1 ]]; then
+    COMPREPLY=( $(compgen -W "$commands" -- "$cur") )
+    return 0
+  fi
+
+  case "$prev" in
+    add-agent)
+      local agents
+      agents="$(athena-ctl _list-agents 2>/dev/null)"
+      COMPREPLY=( $(compgen -W "$agents" -- "$cur") )
+      ;;
+    add-skill)
+      local skills
+      skills="$(athena-ctl _list-skills 2>/dev/null)"
+      COMPREPLY=( $(compgen -W "$skills" -- "$cur") )
+      ;;
+    completion)
+      COMPREPLY=( $(compgen -W "zsh bash" -- "$cur") )
+      ;;
+  esac
+}
+complete -F _athena_ctl_bash athena-ctl
+COMP_BASH
+    fi
+    ;;
+  new-skill)
+    NAME="${2:?Usage: athena-ctl new-skill <skill-name>}"
+    SKILL_DIR="$CATALOG/custom-skills/$NAME"
+    mkdir -p "$SKILL_DIR"
+    cat << SKILLEOF > "$SKILL_DIR/SKILL.md"
+---
+name: $NAME
+description: Describe when OpenCode should load this skill.
+---
+# $NAME Instructions
+- Step 1: ...
+SKILLEOF
+    echo "Created new custom skill template at $SKILL_DIR/SKILL.md"
+    ;;
+  *)
+    echo "Usage: athena-ctl [list | new-project <name> | init-repo | add-agent <name...> | add-skill <name...> | new-skill <name> | completion [zsh|bash]]"
+    ;;
+esac

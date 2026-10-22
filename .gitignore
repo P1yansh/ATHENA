@@ -1,0 +1,15 @@
+# Local workspace projects (each project inside here has its own independent git repo)
+/projects/*
+!/projects/.gitkeep
+
+# Local LLM weights & logs
+/models/*.gguf
+/models/*.bin
+*.log
+
+# Environment & Secrets
+.env
+
+# OS / Editor noise
+.DS_Store
+*.bak
