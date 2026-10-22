@@ -12,8 +12,6 @@ A modular, hardware-scalable AI Agent workflow for Arch Linux combining **Zed**,
 ## Quickstart on Arch Linux
 ```bash
 sudo pacman -S --needed zed opencode llama-cpp ggml-cuda stow jq curl git wl-clipboard
-git clone --recurse-submodules https://github.com/<your-username>/Athena.git ~/Projects/Athena
-cd ~/Projects/Athena
-make init
-make link
+git clone --recurse-submodules git@github.com:P1yansh/Athena.git ~/Athena
+cd ~/Athena && make init link
 ```
